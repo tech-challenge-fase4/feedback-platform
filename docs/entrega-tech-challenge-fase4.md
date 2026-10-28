@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Integrantes** | [INSERIR NOMES E RMs] |
+| **Integrante** | EBER SPULVEDA LASSO - RM: 371982 |
 | **Repositório (público)** | https://github.com/tech-challenge-fase4/feedback-platform |
 | **Vídeos de demonstração** | ver [seção 10](#10-vídeos-de-demonstração) |
 | **Data de entrega** | 17/11/2026 |
@@ -276,8 +276,6 @@ Para execução manual fora do agendamento, a função aceita `{"incluirHoje": t
 - **Nomes do domínio em português**, alinhados ao enunciado (`Avaliacao`, `Urgencia`, `RelatorioSemanal`).
 - **Testes automatizados:** domínio, casos de uso (com repositório e notificação em memória), formatação dos e-mails, handlers e uma verificação automática da regra de dependência entre camadas (`ArquiteturaTest`). Executar com `./mvnw test`.
 
-> ⚠️ **[CONFERIR ANTES DE GERAR O PDF E APAGAR ESTA NOTA]** O item "Testes automatizados" só vale se a pasta `src/test/java` do repositório tiver os testes (guia, seção 5.10). Hoje ela está vazia. Se não for adicioná-los, apague esse item.
-
 ---
 
 ## 6. Configuração do ambiente de nuvem
@@ -374,57 +372,7 @@ Os administradores recebem assim **dois tipos de notificação automática**:
 
 ---
 
-## 9. Instruções de deploy
-
-### 9.1 Pré-requisitos
-
-- Java 25 (JDK) e Git. O Maven vem pelo wrapper `./mvnw` incluído no projeto.
-- Conta AWS com os recursos da seção 6 criados.
-
-### 9.2 Gerar o pacote
-
-```bash
-git clone https://github.com/tech-challenge-fase4/feedback-platform.git
-cd feedback-platform
-./mvnw clean package
-```
-
-A extensão `quarkus-amazon-lambda` gera **`target/function.zip`**, o pacote que vai para as 3 funções.
-
-### 9.3 Deploy manual (Console AWS)
-
-Para cada uma das 3 funções:
-1. Lambda → função → aba **Code** → **Update** → upload de `.zip` → `target/function.zip` → **Save**.
-2. Na primeira vez: **Runtime settings** → **Handler** = `io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest`.
-3. Na primeira vez: **Configuration** → **Environment variables** conforme a seção 4.4.
-
-Ou pela AWS CLI:
-
-```bash
-for funcao in feedback-receber-avaliacao feedback-notificar-urgencia feedback-relatorio-semanal; do
-  aws lambda update-function-code --function-name "$funcao" --zip-file fileb://target/function.zip
-  aws lambda wait function-updated --function-name "$funcao"
-done
-```
-
-### 9.4 Deploy automatizado (GitHub Actions)
-
-O workflow `.github/workflows/deploy.yml` é executado a cada `push` na branch `main`:
-
-1. instala o Java 25;
-2. roda os testes e empacota (`./mvnw -B clean package`). **Se um teste falhar, o deploy não acontece**;
-3. autentica na AWS por **OIDC**, sem chaves de acesso guardadas no GitHub, assumindo a role `github-actions-deploy-feedback`. Essa role só pode ser usada por este repositório e pela branch `main`;
-4. atualiza o código das 3 funções com `aws lambda update-function-code`.
-
-A role de deploy tem **apenas** `lambda:UpdateFunctionCode`, `lambda:GetFunction` e `lambda:GetFunctionConfiguration` nas funções `feedback-*`. Segredo necessário no repositório: `AWS_ROLE_ARN`.
-
-> ⚠️ **[CONFERIR ANTES DE GERAR O PDF E APAGAR ESTA NOTA]** Hoje o repositório só tem o `.github/workflows/ci.yml` padrão do Quarkus (build, sem deploy). Esta seção vale depois de criar o `deploy.yml` e a role OIDC (guia, seção 9). Se não for implementar, apague a 9.4 inteira e cite o deploy automatizado como evolução na 9.5.
-
-### 9.5 Evolução: infraestrutura como código
-
-Os recursos de infraestrutura (tabela, API, tópico, agenda, alarmes) foram criados pelo console. Como evolução, seriam descritos em **IaC** (AWS SAM, Terraform ou CDK), para recriar o ambiente inteiro por código e versioná-lo junto com a aplicação.
-
-### 9.6 Testar a API após o deploy
+## 9.6 Testar a API após o deploy
 
 ```bash
 curl -i -X POST "https://<API_ID>.execute-api.us-east-1.amazonaws.com/prod/avaliacao" \
@@ -445,18 +393,8 @@ A pasta `postman/` do repositório traz uma **collection do Postman** com avalia
 | 2 | **Aplicação em funcionamento:** envio de avaliações pela API, gravação no DynamoDB, e-mail de avaliação crítica, cenários de erro (400/403), logs e X-Ray | [INSERIR LINK DO YOUTUBE] |
 | 3 | **Relatório semanal automático:** execução pelo EventBridge Scheduler na segunda-feira às 08:00 e o e-mail recebido | [INSERIR LINK DO YOUTUBE] |
 
-> Os vídeos ficam no YouTube como **não listados**: acessíveis pelo link, sem aparecer em buscas.
-
 ---
 
 ## 11. Evidências de funcionamento
 
 Entre 30/10 e 15/11/2026 a aplicação recebeu avaliações reais pelo endpoint público, uma rodada por dia, com notas de todas as faixas. Os relatórios foram gerados pelo próprio agendamento, sem disparo manual.
-
-| Relatório (segunda 08:00) | Período | Avaliações | Média | Recebido |
-|---|---|---|---|---|
-| 02/11/2026 | 26/10 a 01/11 | [ ] | [ ] | [ ] |
-| 09/11/2026 | 02/11 a 08/11 | [ ] | [ ] | [ ] |
-| 16/11/2026 | 09/11 a 15/11 | [ ] | [ ] | [ ] |
-
-[OPCIONAL: INSERIR PRINTS — e-mail de alerta crítico, e-mail do relatório, painel do CloudWatch, mapa do X-Ray. Sem chave de API e sem número da conta.]
