@@ -10,15 +10,21 @@ import br.com.techchallenge.feedback.domain.Avaliacao;
 /** Monta o e-mail de aviso de urgência (Descrição, Urgência e Data de envio). */
 public class MensagemUrgenciaFormatter {
 
+    /** Assunto do e-mail de urgência. */
     public static final String ASSUNTO = "[URGENTE] Nova avaliação crítica recebida";
     private static final DateTimeFormatter DATA_HORA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
     private final ZoneId zona;
 
+    /** @param zona fuso em que a data de envio é mostrada no e-mail */
     public MensagemUrgenciaFormatter(ZoneId zona) {
         this.zona = Objects.requireNonNull(zona);
     }
 
+    /**
+     * @param a avaliação crítica
+     * @return assunto e texto do e-mail de urgência
+     */
     public Notificacao formatar(Avaliacao a) {
         String texto = """
                 ALERTA: AVALIAÇÃO CRÍTICA RECEBIDA

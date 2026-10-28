@@ -12,17 +12,26 @@ import br.com.techchallenge.feedback.domain.RelatorioSemanal;
 /** Transforma o RelatorioSemanal (cálculo) no texto do e-mail (apresentação). */
 public class RelatorioFormatter {
 
-    public static final int LIMITE_LISTA = 100; // o e-mail do SNS tem limite de 256 KB
+    /** Máximo de avaliações listadas no e-mail (o e-mail do SNS tem limite de 256 KB). */
+    public static final int LIMITE_LISTA = 100;
     private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
     private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATA_HORA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
     private final ZoneId zona;
 
+    /** @param zona fuso em que as datas de envio são mostradas no e-mail */
     public RelatorioFormatter(ZoneId zona) {
         this.zona = Objects.requireNonNull(zona);
     }
 
+    /**
+     * Monta o e-mail com período, total, média, quantidade por dia, quantidade por urgência
+     * e a lista das avaliações (descrição, urgência e data de envio).
+     *
+     * @param r relatório já calculado
+     * @return assunto e texto do e-mail do relatório
+     */
     public Notificacao formatar(RelatorioSemanal r) {
         String inicio = DATA.format(r.periodo().inicio());
         String fim = DATA.format(r.periodo().fim());

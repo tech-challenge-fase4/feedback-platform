@@ -16,12 +16,17 @@ public class SnsNotificacaoGateway implements NotificacaoGateway {
     private final SnsClient sns;
     private final String topicoArn;
 
+    /**
+     * @param sns       cliente do SNS criado pela extensão do Quarkus
+     * @param topicoArn valor de {@code app.topico-arn} (variável de ambiente {@code TOPICO_ARN})
+     */
     @Inject
     public SnsNotificacaoGateway(SnsClient sns, @ConfigProperty(name = "app.topico-arn") String topicoArn) {
         this.sns = sns;
         this.topicoArn = topicoArn;
     }
 
+    /** Publica no tópico; o SNS entrega por e-mail a todos os assinantes confirmados. */
     @Override
     public void enviar(Notificacao notificacao) {
         sns.publish(PublishRequest.builder()

@@ -30,12 +30,25 @@ public class RelatorioSemanalHandler implements RequestStreamHandler {
     private final GerarRelatorioSemanalUseCase gerarRelatorioSemanal;
     private final ObjectMapper mapper;
 
+    /**
+     * @param gerarRelatorioSemanal caso de uso que consolida e envia o relatório
+     * @param mapper                conversor JSON do Quarkus
+     */
     @Inject
     public RelatorioSemanalHandler(GerarRelatorioSemanalUseCase gerarRelatorioSemanal, ObjectMapper mapper) {
         this.gerarRelatorioSemanal = gerarRelatorioSemanal;
         this.mapper = mapper;
     }
 
+    /**
+     * Gera e envia o relatório da semana.
+     *
+     * @param entrada evento do EventBridge Scheduler: {@code {}} na execução agendada, ou
+     *                {@code {"incluirHoje": true}} para incluir o dia atual (execução manual)
+     * @param saida   recebe {@code {"total": n, "media": m}}, visível no console e nos logs
+     * @param contexto contexto da execução na AWS
+     * @throws IOException se o evento não for um JSON válido
+     */
     @Override
     public void handleRequest(InputStream entrada, OutputStream saida, Context contexto) throws IOException {
         JsonNode evento = mapper.readTree(entrada);

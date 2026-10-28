@@ -24,11 +24,16 @@ import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
 @Singleton
 public class DynamoDbAvaliacaoRepository implements AvaliacaoRepository {
 
+    /** Índice global da tabela: partição {@code dia}, ordenação {@code dataEnvio}. */
     public static final String INDICE_DIA = "indice-dia";
 
     private final DynamoDbClient dynamo;
     private final String tabela;
 
+    /**
+     * @param dynamo cliente do DynamoDB criado pela extensão do Quarkus
+     * @param tabela valor de {@code app.tabela} (variável de ambiente {@code TABELA_AVALIACOES})
+     */
     @Inject
     public DynamoDbAvaliacaoRepository(DynamoDbClient dynamo,
                                        @ConfigProperty(name = "app.tabela") String tabela) {
@@ -36,6 +41,7 @@ public class DynamoDbAvaliacaoRepository implements AvaliacaoRepository {
         this.tabela = tabela;
     }
 
+    /** Grava com {@code PutItem} (a role da Função 1 só tem esta permissão). */
     @Override
     public void salvar(Avaliacao avaliacao) {
         dynamo.putItem(PutItemRequest.builder()
@@ -44,7 +50,10 @@ public class DynamoDbAvaliacaoRepository implements AvaliacaoRepository {
                 .build());
     }
 
-    /** Consulta o índice por dia (sem varrer a tabela inteira). */
+    /**
+     * Consulta o índice por dia (sem varrer a tabela inteira). Percorre todas as páginas
+     * do resultado, já que uma {@code Query} devolve no máximo 1 MB por vez.
+     */
     @Override
     public List<Avaliacao> buscarPorDia(LocalDate dia) {
         QueryRequest consulta = QueryRequest.builder()

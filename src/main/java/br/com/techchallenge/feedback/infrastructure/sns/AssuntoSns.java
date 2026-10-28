@@ -9,11 +9,19 @@ import java.text.Normalizer;
  */
 public final class AssuntoSns {
 
+    /** Tamanho máximo do assunto aceito pelo SNS. */
     public static final int MAX = 100;
 
     private AssuntoSns() {
     }
 
+    /**
+     * Remove acentos, quebras de linha e caracteres fora do ASCII, e corta em {@value #MAX}.
+     * Ex.: "Relatório semanal" vira "Relatorio semanal".
+     *
+     * @param assunto assunto original
+     * @return assunto aceito pelo SNS; "Notificacao" se nada sobrar
+     */
     public static String normalizar(String assunto) {
         String semAcento = Normalizer.normalize(assunto, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
         String ascii = semAcento.replaceAll("[\\r\\n\\t]+", " ").replaceAll("[^\\x20-\\x7E]", "").trim();

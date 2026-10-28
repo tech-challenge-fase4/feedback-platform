@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
  */
 public final class AvaliacaoItemMapper {
 
+    /** Nomes dos atributos do item na tabela (e no índice {@code indice-dia}). */
     public static final String ID = "id";
     public static final String DESCRICAO = "descricao";
     public static final String NOTA = "nota";
@@ -24,6 +25,10 @@ public final class AvaliacaoItemMapper {
     private AvaliacaoItemMapper() {
     }
 
+    /**
+     * @param a avaliação do domínio
+     * @return item no formato do DynamoDB, pronto para o {@code PutItem}
+     */
     public static Map<String, AttributeValue> paraItem(Avaliacao a) {
         return Map.of(
                 ID, AttributeValue.fromS(a.id()),
@@ -34,6 +39,15 @@ public final class AvaliacaoItemMapper {
                 DIA, AttributeValue.fromS(a.dia().toString()));
     }
 
+    /**
+     * Converte o item de volta para o domínio, que valida os dados novamente.
+     *
+     * @param item item lido da tabela ou recebido pelo DynamoDB Streams
+     * @return a avaliação
+     * @throws IllegalStateException se faltar algum atributo no item
+     * @throws br.com.techchallenge.feedback.domain.AvaliacaoInvalidaException se os dados forem
+     *         incoerentes (ex.: urgência que não corresponde à nota)
+     */
     public static Avaliacao deItem(Map<String, AttributeValue> item) {
         return new Avaliacao(
                 texto(item, ID),

@@ -23,6 +23,12 @@ public class RegistrarAvaliacaoUseCase {
     private final Clock relogio;
     private final ZoneId zona;
 
+    /**
+     * @param repositorio onde a avaliação é gravada
+     * @param geradorDeId gera o id da avaliação
+     * @param relogio     fonte da data/hora atual (fixa nos testes)
+     * @param zona        fuso usado para calcular o dia local da avaliação
+     */
     public RegistrarAvaliacaoUseCase(AvaliacaoRepository repositorio, GeradorDeId geradorDeId,
                                      Clock relogio, ZoneId zona) {
         this.repositorio = Objects.requireNonNull(repositorio);
@@ -31,7 +37,13 @@ public class RegistrarAvaliacaoUseCase {
         this.zona = Objects.requireNonNull(zona);
     }
 
-    /** @throws AvaliacaoInvalidaException se os dados não respeitarem as regras */
+    /**
+     * Valida, calcula a urgência e grava a avaliação.
+     *
+     * @param comando dados recebidos na requisição
+     * @return id, nota, urgência e data de envio da avaliação gravada
+     * @throws AvaliacaoInvalidaException se os dados não respeitarem as regras
+     */
     public AvaliacaoRegistrada executar(RegistrarAvaliacaoCommand comando) {
         if (comando.nota() == null) {
             throw new AvaliacaoInvalidaException(

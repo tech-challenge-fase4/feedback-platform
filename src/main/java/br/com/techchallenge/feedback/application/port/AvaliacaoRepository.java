@@ -11,8 +11,16 @@ import br.com.techchallenge.feedback.domain.Avaliacao;
  */
 public interface AvaliacaoRepository {
 
+    /**
+     * Grava uma avaliação nova.
+     *
+     * @param avaliacao avaliação já validada pelo domínio
+     */
     void salvar(Avaliacao avaliacao);
 
-    /** Todas as avaliações cujo dia local é {@code dia}. */
+    /**
+     * @param dia data local (ex.: no fuso de São Paulo)
+     * @return todas as avaliações cujo dia local é {@code dia}; lista vazia se não houver
+     */
     List<Avaliacao> buscarPorDia(LocalDate dia);
 }

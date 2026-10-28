@@ -19,6 +19,11 @@ public final class ImagemStreamDynamoDb {
     private ImagemStreamDynamoDb() {
     }
 
+    /**
+     * @param novaImagem campo {@code dynamodb.NewImage} de um registro do stream
+     * @return a avaliação gravada
+     * @throws IllegalStateException se faltar algum atributo no item
+     */
     public static Avaliacao paraAvaliacao(JsonNode novaImagem) {
         Map<String, AttributeValue> item = new HashMap<>();
         for (Map.Entry<String, JsonNode> campo : novaImagem.properties()) {

@@ -25,6 +25,13 @@ public class GerarRelatorioSemanalUseCase {
     private final Clock relogio;
     private final ZoneId zona;
 
+    /**
+     * @param repositorio de onde as avaliações são lidas, dia a dia
+     * @param notificacao canal de envio do relatório
+     * @param formatador  monta o texto do e-mail do relatório
+     * @param relogio     fonte da data/hora atual (fixa nos testes)
+     * @param zona        fuso usado para saber qual é o dia de "hoje"
+     */
     public GerarRelatorioSemanalUseCase(AvaliacaoRepository repositorio, NotificacaoGateway notificacao,
                                         RelatorioFormatter formatador, Clock relogio, ZoneId zona) {
         this.repositorio = Objects.requireNonNull(repositorio);
@@ -35,8 +42,11 @@ public class GerarRelatorioSemanalUseCase {
     }
 
     /**
+     * Lê as avaliações do período, consolida e envia o relatório aos administradores.
+     *
      * @param incluirHoje false = 7 dias anteriores (execução agendada);
      *                    true = 6 dias anteriores + hoje (demonstração)
+     * @return o relatório enviado
      */
     public RelatorioSemanal executar(boolean incluirHoje) {
         LocalDate hoje = LocalDate.ofInstant(relogio.instant(), zona);

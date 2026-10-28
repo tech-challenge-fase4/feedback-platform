@@ -30,6 +30,10 @@ public class NotificarUrgenciaHandler implements RequestStreamHandler {
     private final NotificarAvaliacaoCriticaUseCase notificarAvaliacaoCritica;
     private final ObjectMapper mapper;
 
+    /**
+     * @param notificarAvaliacaoCritica caso de uso que decide e envia o aviso
+     * @param mapper                    conversor JSON do Quarkus
+     */
     @Inject
     public NotificarUrgenciaHandler(NotificarAvaliacaoCriticaUseCase notificarAvaliacaoCritica,
                                     ObjectMapper mapper) {
@@ -37,6 +41,15 @@ public class NotificarUrgenciaHandler implements RequestStreamHandler {
         this.mapper = mapper;
     }
 
+    /**
+     * Processa um lote de registros do DynamoDB Streams. Se lançar exceção, a AWS
+     * reenvia o lote (até 3 tentativas, conforme a configuração do gatilho).
+     *
+     * @param entrada evento {@code {"Records": [...]}} do DynamoDB Streams
+     * @param saida   não usada (o stream não espera resposta)
+     * @param contexto contexto da execução na AWS
+     * @throws IOException se o evento não for um JSON válido
+     */
     @Override
     public void handleRequest(InputStream entrada, OutputStream saida, Context contexto) throws IOException {
         JsonNode evento = mapper.readTree(entrada);

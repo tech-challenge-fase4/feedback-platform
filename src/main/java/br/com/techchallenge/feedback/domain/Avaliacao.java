@@ -12,14 +12,27 @@ import java.util.Objects;
  * O construtor valida tudo, então NÃO EXISTE Avaliacao inválida em memória
  * (nota fora da faixa, descrição vazia ou urgência que não bate com a nota).
  *
+ * @param id        identificador único (UUID gerado na criação)
+ * @param descricao texto da avaliação, de 1 a {@value #MAX_DESCRICAO} caracteres
+ * @param nota      nota de {@value Urgencia#NOTA_MINIMA} a {@value Urgencia#NOTA_MAXIMA}
+ * @param urgencia  urgência, que precisa corresponder à nota (ver {@link Urgencia#deNota(int)})
  * @param dataEnvio instante do envio (UTC)
  * @param dia       data local do envio (ex.: no fuso de São Paulo); usada para agrupar por dia
  */
 public record Avaliacao(String id, String descricao, int nota, Urgencia urgencia,
                         Instant dataEnvio, LocalDate dia) {
 
+    /** Tamanho máximo da descrição, em caracteres. */
     public static final int MAX_DESCRICAO = 1000;
 
+    /**
+     * Valida todos os campos. Usado na criação ({@link #nova}) e ao ler um item já gravado.
+     *
+     * @throws AvaliacaoInvalidaException se id ou descrição estiverem vazios, a descrição passar
+     *                                    do limite, a nota estiver fora da faixa ou a urgência não
+     *                                    corresponder à nota
+     * @throws NullPointerException       se {@code dataEnvio} ou {@code dia} forem nulos
+     */
     public Avaliacao {
         if (id == null || id.isBlank()) {
             throw new AvaliacaoInvalidaException("A avaliação precisa de um id");
@@ -43,6 +56,14 @@ public record Avaliacao(String id, String descricao, int nota, Urgencia urgencia
     /**
      * Cria uma avaliação nova: remove espaços da descrição, calcula a urgência
      * e registra data de envio (precisão de segundos) e dia local.
+     *
+     * @param id        identificador já gerado
+     * @param descricao texto enviado pelo estudante (espaços nas pontas são removidos)
+     * @param nota      nota enviada pelo estudante
+     * @param agora     instante atual (vem de um {@link java.time.Clock}, para ser testável)
+     * @param zona      fuso usado para calcular o dia local
+     * @return a avaliação válida, pronta para ser gravada
+     * @throws AvaliacaoInvalidaException se algum dado não respeitar as regras
      */
     public static Avaliacao nova(String id, String descricao, int nota, Instant agora, ZoneId zona) {
         if (descricao == null) {

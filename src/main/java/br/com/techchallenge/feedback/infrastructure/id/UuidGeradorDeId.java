@@ -9,6 +9,7 @@ import jakarta.inject.Singleton;
 @Singleton
 public class UuidGeradorDeId implements GeradorDeId {
 
+    /** @return um UUID versão 4 em texto */
     @Override
     public String novoId() {
         return UUID.randomUUID().toString();

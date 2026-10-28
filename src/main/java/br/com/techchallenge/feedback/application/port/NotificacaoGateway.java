@@ -6,5 +6,10 @@ package br.com.techchallenge.feedback.application.port;
  */
 public interface NotificacaoGateway {
 
+    /**
+     * Envia a mensagem aos administradores.
+     *
+     * @param notificacao assunto e texto já formatados
+     */
     void enviar(Notificacao notificacao);
 }

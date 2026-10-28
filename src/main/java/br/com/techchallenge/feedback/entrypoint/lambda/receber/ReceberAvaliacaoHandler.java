@@ -35,12 +35,25 @@ public class ReceberAvaliacaoHandler implements RequestStreamHandler {
     private final RegistrarAvaliacaoUseCase registrarAvaliacao;
     private final ObjectMapper mapper;
 
+    /**
+     * @param registrarAvaliacao caso de uso que valida e grava a avaliação
+     * @param mapper             conversor JSON do Quarkus
+     */
     @Inject
     public ReceberAvaliacaoHandler(RegistrarAvaliacaoUseCase registrarAvaliacao, ObjectMapper mapper) {
         this.registrarAvaliacao = registrarAvaliacao;
         this.mapper = mapper;
     }
 
+    /**
+     * Trata {@code POST /avaliacao}. Responde 201 (gravada), 400 (entrada inválida)
+     * ou 500 (erro inesperado), sempre no formato da integração proxy do API Gateway.
+     *
+     * @param entrada evento do API Gateway; o JSON da requisição vem em texto no campo {@code body}
+     * @param saida   onde a resposta HTTP é escrita
+     * @param contexto contexto da execução na AWS
+     * @throws IOException se não for possível escrever a resposta
+     */
     @Override
     public void handleRequest(InputStream entrada, OutputStream saida, Context contexto) throws IOException {
         try {

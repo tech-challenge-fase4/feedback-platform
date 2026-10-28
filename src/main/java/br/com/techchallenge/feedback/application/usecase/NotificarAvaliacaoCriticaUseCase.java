@@ -17,13 +17,22 @@ public class NotificarAvaliacaoCriticaUseCase {
     private final NotificacaoGateway notificacao;
     private final MensagemUrgenciaFormatter formatador;
 
+    /**
+     * @param notificacao canal de envio aos administradores
+     * @param formatador  monta o texto do e-mail de urgência
+     */
     public NotificarAvaliacaoCriticaUseCase(NotificacaoGateway notificacao,
                                             MensagemUrgenciaFormatter formatador) {
         this.notificacao = Objects.requireNonNull(notificacao);
         this.formatador = Objects.requireNonNull(formatador);
     }
 
-    /** @return true se o aviso foi enviado; false se a avaliação não era crítica */
+    /**
+     * Envia o aviso se, e somente se, a avaliação for crítica.
+     *
+     * @param avaliacao avaliação recém-gravada
+     * @return true se o aviso foi enviado; false se a avaliação não era crítica
+     */
     public boolean executar(Avaliacao avaliacao) {
         if (!avaliacao.urgencia().ehCritica()) {
             return false;

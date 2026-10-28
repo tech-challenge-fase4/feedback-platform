@@ -4,5 +4,6 @@ package br.com.techchallenge.feedback.application.port;
 @FunctionalInterface
 public interface GeradorDeId {
 
+    /** @return um identificador que ainda não foi usado */
     String novoId();
 }

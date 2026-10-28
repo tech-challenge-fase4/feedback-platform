@@ -12,18 +12,32 @@ import java.util.Map;
 /**
  * Resultado consolidado da semana: total, média, quantidade por dia e por urgência.
  * Só faz CÁLCULO; a formatação do e-mail fica em outra classe (application/formatacao).
+ *
+ * @param periodo     dias cobertos pelo relatório
+ * @param total       quantidade de avaliações do período
+ * @param media       média das notas (0 quando não há avaliações)
+ * @param porDia      quantidade por dia, em ordem, incluindo dias com 0
+ * @param porUrgencia quantidade por urgência, incluindo urgências com 0
+ * @param avaliacoes  avaliações do período, ordenadas pela data de envio
  */
 public record RelatorioSemanal(PeriodoRelatorio periodo, int total, double media,
                                Map<LocalDate, Integer> porDia, Map<Urgencia, Integer> porUrgencia,
                                List<Avaliacao> avaliacoes) {
 
+    /** Guarda cópias imutáveis das coleções, para o relatório não mudar depois de criado. */
     public RelatorioSemanal {
         porDia = Collections.unmodifiableMap(new LinkedHashMap<>(porDia));
         porUrgencia = Collections.unmodifiableMap(new EnumMap<>(porUrgencia));
         avaliacoes = List.copyOf(avaliacoes);
     }
 
-    /** Consolida as avaliações do período. Avaliações fora do período são ignoradas. */
+    /**
+     * Consolida as avaliações do período. Avaliações fora do período são ignoradas.
+     *
+     * @param avaliacoes avaliações lidas do repositório
+     * @param periodo    dias que o relatório cobre
+     * @return o relatório com total, média e contagens
+     */
     public static RelatorioSemanal consolidar(List<Avaliacao> avaliacoes, PeriodoRelatorio periodo) {
         Map<LocalDate, Integer> porDia = new LinkedHashMap<>();
         for (LocalDate dia : periodo.dias()) {
