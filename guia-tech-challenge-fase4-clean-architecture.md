@@ -43,6 +43,7 @@
 12. [Checklist final de entrega](#12-checklist-final-de-entrega)
 13. [Desligar tudo e controlar custos](#13-desligar-tudo-e-controlar-custos)
 14. [Problemas comuns e soluções](#14-problemas-comuns-e-soluções)
+15. [Plano de execução em produção (30/10 a 15/11/2026)](#15-plano-de-execução-em-produção-3010-a-15112026)
 
 ---
 
@@ -421,6 +422,15 @@ rm -rf src/test/java/br/com/techchallenge/feedback/{comum,receber,notificar,rela
 
 - `<maven.compiler.release>25</maven.compiler.release>`. Se estiver `21`, troque para `25`.
 - Dentro de `<dependencies>`: `quarkus-amazon-lambda`, `quarkus-amazon-dynamodb` e `quarkus-amazon-sns`.
+  - ⚠️ **Confira o `groupId` do `quarkus-amazon-lambda`: tem de ser `io.quarkus`.** Existem dois artefatos com esse mesmo nome. O de `io.quarkiverse.amazonservices` é só o **cliente** do SDK (serve para *chamar* outras Lambdas) e não traz `RequestStreamHandler`/`Context` nem gera o `target/function.zip`. Se ele estiver lá, o build falha com `package com.amazonaws.services.lambda.runtime does not exist`. O correto:
+
+    ```xml
+            <dependency>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-amazon-lambda</artifactId>
+            </dependency>
+    ```
+  - Já `quarkus-amazon-dynamodb` e `quarkus-amazon-sns` são mesmo `io.quarkiverse.amazonservices`.
 - Uma dependência de teste chamada `quarkus-junit5` (nas versões mais novas o nome pode ser `quarkus-junit`). É ela que traz o **JUnit 5** usado nos testes.
 - Dentro de `<dependencyManagement>`: **BOMs** (listas de versões), incluindo um com `quarkus-amazon-services-bom`. Eles garantem as versões; por isso geramos pelo site em vez de escrever o pom do zero.
 
@@ -2826,6 +2836,45 @@ Uma **role** é a "identidade" que a função usa para acessar outros serviços.
   ]
 }
 ```
+
+<details>
+<summary>📖 <b>Entendendo esta política</b> (consulta; não precisa fazer nada)</summary>
+
+É uma **política IAM**: um documento JSON que diz **quem pode fazer o quê, em qual recurso**. Esta libera para a Função 1 uma única coisa: **gravar avaliações na tabela**.
+
+| Campo | Valor | Significado |
+|---|---|---|
+| `Version` | `"2012-10-17"` | Versão da linguagem de políticas da AWS. É sempre esse valor fixo; não é a data de hoje |
+| `Statement` | `[ ... ]` | Lista de regras. Aqui há só uma |
+| `Sid` | `"GravarAvaliacao"` | Apelido da regra, só para leitura humana. Não tem efeito |
+| `Effect` | `"Allow"` | A regra **permite**. O oposto seria `"Deny"` |
+| `Action` | `"dynamodb:PutItem"` | A operação permitida: inserir (ou substituir) um item no DynamoDB |
+| `Resource` | `arn:aws:dynamodb:...:table/feedback-avaliacoes` | **Onde** vale a permissão: só nesta tabela, nesta região, nesta conta |
+
+**Como ler o ARN** (o "endereço" único de um recurso na AWS):
+
+```
+arn : aws : dynamodb : us-east-1 : SEU_ACCOUNT_ID : table/feedback-avaliacoes
+       │       │          │              │                └─ recurso: a tabela
+       │       │          │              └─ número da sua conta (12 dígitos)
+       │       │          └─ região (N. Virginia)
+       │       └─ serviço
+       └─ partição (AWS comercial)
+```
+
+**Por que tão restrita: menor privilégio.** Na AWS, **tudo o que não está explicitamente permitido é negado**. Com essa política, a Função 1:
+
+- ✅ consegue gravar avaliações em `feedback-avaliacoes`;
+- ❌ não consegue **ler** a tabela (`GetItem`, `Query`, `Scan`);
+- ❌ não consegue **apagar** nada (`DeleteItem`, `DeleteTable`);
+- ❌ não consegue mexer em **outra tabela** nem em outro serviço (SNS, S3…).
+
+Se alguém explorasse uma falha nessa função, o máximo que conseguiria seria inserir itens. Não daria para ler avaliações de outros alunos nem apagar dados.
+
+Isso bate com o código: o caso de uso da Função 1 só chama `salvar`, que faz um `PutItem`. As outras funções (C e D abaixo) recebem políticas diferentes, cada uma com apenas o que precisa: a de notificação pode publicar no SNS e ler o stream, e a do relatório pode fazer `Query` no `indice-dia`.
+
+</details>
+
 7. ▶ **Next**. **Policy name**: `permissao-gravar-avaliacao`. **Create policy**.
 
 ✅ A Função 1 **só pode gravar** na tabela. Não lê, não apaga, não envia e-mail.
@@ -2862,6 +2911,37 @@ Uma **role** é a "identidade" que a função usa para acessar outros serviços.
 }
 ```
 
+<details>
+<summary>📖 <b>Entendendo esta política</b> (consulta; não precisa fazer nada)</summary>
+
+Esta política tem **3 regras** e libera para a Função 2 duas coisas: **ler o stream da tabela** (para saber que chegou avaliação nova) e **publicar no tópico SNS** (para mandar o e-mail de urgência).
+
+| `Sid` | `Action` | `Resource` | Significado |
+|---|---|---|---|
+| `PublicarNoTopico` | `sns:Publish` | `arn:aws:sns:...:feedback-admins` | Enviar mensagem **só** para o tópico dos administradores |
+| `LerStreamDaTabela` | `DescribeStream`, `GetRecords`, `GetShardIterator` | `arn:aws:dynamodb:...:table/feedback-avaliacoes/stream/*` | Ler os eventos do stream **desta tabela** |
+| `ListarStreams` | `dynamodb:ListStreams` | `*` | Descobrir quais streams existem |
+
+**As 3 ações de leitura do stream.** O stream é dividido em pedaços (*shards*), e ler um deles exige três passos:
+
+1. `DescribeStream`: "quais shards este stream tem?"
+2. `GetShardIterator`: "me dê um marcador para começar a ler este shard".
+3. `GetRecords`: "me dê os eventos a partir desse marcador".
+
+Quem faz essas chamadas é o **serviço Lambda**, não o seu código. Ele lê o stream em nome da função, **usando a role dela**, e entrega os eventos já prontos para o handler. Por isso a role precisa da permissão, mesmo que o código Java nunca chame essas APIs.
+
+**Por que `stream/*` (com asterisco).** O ARN de um stream termina com a data/hora em que ele foi ligado, por exemplo `.../stream/2026-10-28T11:41:00.123`. Se você desligar e religar o stream, esse final muda. O `*` cobre qualquer stream **desta tabela** sem precisar editar a política.
+
+**Por que `ListStreams` usa `"Resource": "*"`.** Essa ação lista streams **da conta**, então não age sobre um recurso específico e a AWS só aceita `*` nela. Ela só revela **nomes** de streams, não o conteúdo, então o risco é baixo.
+
+**O que a Função 2 NÃO consegue fazer:**
+
+- ❌ gravar, alterar ou apagar itens na tabela (só lê o stream);
+- ❌ fazer `Query`/`Scan` na tabela;
+- ❌ publicar em outro tópico SNS ou mandar SMS/e-mail avulso.
+
+</details>
+
 **D) Role da Função 3** (`feedback-role-relatorio`): repita 1 a 4 com o nome `feedback-role-relatorio` e a política inline `permissao-consultar-e-publicar`:
 
 ```json
@@ -2884,6 +2964,31 @@ Uma **role** é a "identidade" que a função usa para acessar outros serviços.
 }
 ```
 
+<details>
+<summary>📖 <b>Entendendo esta política</b> (consulta; não precisa fazer nada)</summary>
+
+Esta política tem **2 regras** e libera para a Função 3 duas coisas: **consultar as avaliações por dia** e **publicar o relatório no tópico SNS**.
+
+| `Sid` | `Action` | `Resource` | Significado |
+|---|---|---|---|
+| `ConsultarIndicePorDia` | `dynamodb:Query` | `arn:aws:dynamodb:...:table/feedback-avaliacoes/index/indice-dia` | Fazer `Query` **só no índice** `indice-dia` |
+| `PublicarNoTopico` | `sns:Publish` | `arn:aws:sns:...:feedback-admins` | Enviar o relatório **só** para o tópico dos administradores |
+
+**Por que o `Resource` aponta para o índice, não para a tabela.** O ARN termina em `/index/indice-dia`. Com isso, a função só consegue consultar **pelo índice**, que é exatamente o que o código faz em `DynamoDbAvaliacaoRepository.buscarPorDia` (`indexName("indice-dia")`, uma `Query` por dia da semana). Uma `Query` direto na tabela principal seria **negada**.
+
+Se o nome do índice no console for diferente de `indice-dia`, a consulta falha com `AccessDeniedException`, porque o ARN não bate. É mais um motivo para usar exatamente esse nome na seção 6.1 B.
+
+**Por que `Query` e não `Scan`.** O `Scan` lê a **tabela inteira** e cobra por tudo o que leu. A `Query` no índice lê só os itens do dia pedido, o que é mais barato e mais rápido. Como a política não libera `Scan`, nem um erro no código conseguiria varrer a tabela.
+
+**O que a Função 3 NÃO consegue fazer:**
+
+- ❌ gravar, alterar ou apagar avaliações;
+- ❌ ler item por `id` (`GetItem`) nem varrer a tabela (`Scan`);
+- ❌ ler o stream;
+- ❌ publicar em outro tópico SNS.
+
+</details>
+
 ✅ **Pronto quando** existem 3 roles `feedback-role-*`, cada uma com **2 políticas gerenciadas + 1 inline**.
 
 > **Para o vídeo (governança):** abra uma role e mostre a política inline: *"cada função só tem permissão para o que faz; se a Função 1 for invadida, ela não consegue enviar e-mail nem ler o banco."*
@@ -2896,31 +3001,40 @@ Uma **role** é a "identidade" que a função usa para acessar outros serviços.
 
 #### A) Criar a Função 1 (`feedback-receber-avaliacao`)
 
-1. ▶ Busque **Lambda** → abra → **Create function**.
-2. ▶ Selecione **Author from scratch**.
-3. ▶ Preencha:
+1. ▶ Busque **Lambda** → abra. O botão de criar depende de a conta já ter funções:
+   - **Nenhuma função ainda** (caso da Função 1): 👀 abre a página inicial "AWS Lambda — Run code without managing servers", com os quadros **Lambda Event**, **Lambda Web** e **Lambda microVMs**. ▶ Clique no botão laranja **Create an Event Function**, no quadro **Lambda Event** do canto superior direito.
+   - **Já existe alguma função** (Funções 2 e 3): 👀 abre a lista **Functions**. ▶ Clique em **Create function**. Se cair na página inicial, use **Create an Event Function** como acima.
+   - *Por que "Event":* as 3 funções são acionadas por eventos (API Gateway, DynamoDB Streams e EventBridge Scheduler), que é o Lambda clássico que o `QuarkusStreamHandler` espera. **Lambda Web** (roda um servidor HTTP inteiro dentro da função) e **Lambda microVMs** não servem aqui.
+2. 👀 Tela **Create Event Function**. ▶ No topo, deixe marcado **Author from scratch** (as outras opções são **Use a blueprint** e **Container image**).
+3. ▶ No quadro **Basic information**, preencha:
    - **Function name**: `feedback-receber-avaliacao`
    - **Runtime**: **Java 25** (se não aparecer, veja a seção 14)
-   - **Architecture**: **arm64** (mais barato e rápido; o Java roda igual)
-4. ▶ Expanda **Change default execution role** → **Use an existing role** → selecione `feedback-role-receber`.
-5. ▶ **Create function**.
+   - 👀 Logo abaixo, o texto **Permissions** avisa que a AWS cria uma role padrão. **Não é essa que queremos**; a troca é feita no passo 4.
+4. ▶ Desça até o quadro **Custom settings** → expanda **▸ Additional settings**. Na parte **General**, ligue duas chaves:
+   - **ARM64 architecture**: **ligada** (o padrão é x86_64; ARM é mais barato e rápido, e o Java roda igual).
+   - **Custom execution role**: **ligada** → no campo que aparece, selecione a role existente `feedback-role-receber`.
+   - **Todo o resto fica desligado**: Durable execution, EC2 capacity provider, Function URL, Tenant isolation mode, VPC, Code signing, Encryption with AWS KMS e Tags.
+   - ⚠️ Os itens com o ícone de ferramenta riscada (Durable execution, EC2 capacity provider e Tenant isolation mode) **não podem ser mudados depois** de criar a função. Confira que estão desligados.
+5. ▶ Botão laranja **Create Event Function** (fim da página).
 
-👀 Abre a página da função, com o editor de código mostrando um exemplo vazio/padrão.
+👀 Abre a página da função. No quadro **Code source** aparece o aviso azul *"The code editor does not support the Java 25 runtime."* **Isso é normal e não é erro:** o editor do navegador só edita Node.js, Python e Ruby, mas o **runtime** Java 25 funciona. Para Java, o código sempre vai por upload do zip (passo 6). Em **Runtime settings** confira **Runtime: Java 25** e **Architecture: arm64**. **Package size ~2 kB** e **Handler `example.Hello::handleRequest`** são o "Hello World" de exemplo da AWS, que os passos 6 a 10 substituem.
 
 **B) Enviar o código**
 
-6. ▶ Aba **Code** → botão **Upload from** ▾ → **.zip or .jar file** → **Upload** → selecione `target/function.zip` do seu projeto → **Save**.
-7. 👀 Mensagem verde "Successfully updated the function".
+6. ▶ Aba **Code** → no quadro **Code source**, botão **Update** ▾ → opção de upload de **.zip** → selecione `target/function.zip` do seu projeto → **Save**.
+   - Em versões anteriores do console, esse botão se chamava **Upload from** ▾ → **.zip or .jar file**.
+7. 👀 Mensagem verde "Successfully updated the function". Em **Code properties**, o **Package size** passa de ~2 kB para dezenas de MB.
 
 **C) Dizer ao Lambda qual classe iniciar (o "handler")**
 
 8. ▶ Ainda na aba **Code**, role até o painel **Runtime settings** → **Edit**.
-9. ▶ No campo **Handler**, **apague e digite exatamente** (é igual para as 3 funções):
+9. ▶ No campo **Handler**, **apague** o exemplo `example.Hello::handleRequest` e **digite exatamente** (é igual para as 3 funções):
 
 ```
 io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest
 ```
 10. ▶ **Save**.
+✅ ▶ **Conferir a role:** aba **Configuration** → **Permissions** → **Execution role** deve ser `feedback-role-receber`. Se aparecer um nome gerado (ex.: `feedback-receber-avaliacao-role-xxxx`), a chave **Custom execution role** do passo 4 ficou desligada: clique em **Edit** → **Use an existing role** → `feedback-role-receber` → **Save**.
 
 > **Por quê:** essa classe do Quarkus liga o framework e entrega o evento à classe marcada com `@Named` que escolhemos na variável de ambiente a seguir. **Não troque esse valor** (a documentação do Quarkus avisa que ele deve ficar fixo).
 
@@ -2929,6 +3043,10 @@ io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest
 11. ▶ Aba **Configuration** → **General configuration** → **Edit**.
 12. ▶ **Memory**: `1024` MB · **Timeout**: `0` min `30` sec → **Save**.
     - *Por quê:* Java com Quarkus inicia melhor com 1024 MB; o tempo máximo de 30 s cobre a partida a frio.
+    - **Não mexa** nos outros campos da tela **Edit basic settings**:
+      - **Ephemeral storage**: deixe `512` MB. É o mínimo e já vem **incluído sem custo**; só se paga o que passar de 512 MB, e o projeto não usa a pasta `/tmp`.
+      - **SnapStart**: deixe **None**. Ele reduz a partida a frio, mas exige revisar o código (IDs e conexões guardados no "snapshot") e não é necessário aqui.
+      - **Execution role**: aparece aqui também; confira que é a role da função (ex.: `feedback-role-receber`).
 
 **E) Variáveis de ambiente**
 
@@ -2942,7 +3060,15 @@ Para a **Função 1**:
 | `TABELA_AVALIACOES` | `feedback-avaliacoes` |
 | `JAVA_TOOL_OPTIONS` | `-XX:+TieredCompilation -XX:TieredStopAtLevel=1` |
 
-> `QUARKUS_LAMBDA_HANDLER` **precisa ser idêntico** ao nome do `@Named` no código. A linha `JAVA_TOOL_OPTIONS` acelera o início da JVM.
+> `QUARKUS_LAMBDA_HANDLER` **precisa ser idêntico** ao nome do `@Named` no código. Cada função usa o seu (as Funções 2 e 3 estão na seção G):
+>
+> | Função | Classe | `@Named` = `QUARKUS_LAMBDA_HANDLER` |
+> |---|---|---|
+> | 1 `feedback-receber-avaliacao` | `ReceberAvaliacaoHandler` | `receberAvaliacao` |
+> | 2 `feedback-notificar-urgencia` | `NotificarUrgenciaHandler` | `notificarUrgencia` |
+> | 3 `feedback-relatorio-semanal` | `RelatorioSemanalHandler` | `relatorioSemanal` |
+>
+> O `function.zip` leva as 3 classes juntas; essa variável é o que escolhe qual delas a função executa. A linha `JAVA_TOOL_OPTIONS` acelera o início da JVM.
 
 **F) Rastreamento (X-Ray)**
 
@@ -3017,15 +3143,17 @@ Isso confirma que código, permissões e variáveis estão certos **antes** de m
 1. ▶ Abra `feedback-notificar-urgencia` → aba **Configuration** → menu esquerdo **Triggers** → **Add trigger**.
 2. ▶ **Select a source**: **DynamoDB**.
 3. ▶ **DynamoDB table**: `feedback-avaliacoes`.
-4. ▶ **Batch size**: `10` · **Starting position**: **Latest**.
-5. ▶ Expanda **Additional settings** e configure:
+4. ▶ No quadro **Event poller configuration**:
+   - **Activate trigger**: deixe **marcado** (já vem assim). Em versões anteriores do console, essa opção se chamava **Enable trigger**.
+   - **Enable EventCount metrics**: deixe **desmarcado** (gera métricas extras no CloudWatch, que são cobradas; não precisamos).
+   - **Batch size**: `10` · **Starting position**: **Latest** · **Batch window**: deixe vazio.
+5. ▶ Expanda **Additional settings** e configure (o resto fica como está):
    - **Retry attempts**: `3` ⚠️ (o padrão é "infinito"; se a função falhar, ficaria tentando para sempre)
    - **Filter criteria** → **Add** → cole o filtro abaixo. *(O filtro faz o Lambda só ser chamado para itens novos de urgência ALTA, economizando execuções.)*
 ```json
 {"eventName":["INSERT"],"dynamodb":{"NewImage":{"urgencia":{"S":["ALTA"]}}}}
 ```
-   - Deixe **Enable trigger** marcado.
-6. ▶ **Add**.
+6. ▶ **Add** (botão laranja no fim da página).
 
 ✅ **Pronto quando** o gatilho aparece na lista com **State: Enabled** (pode levar ~1 minuto até ativar).
 
@@ -3038,7 +3166,9 @@ Usamos **REST API** (e não "HTTP API") porque só a REST API tem **chave de API
 **A) Criar a API**
 
 1. ▶ Busque **API Gateway** → abra.
-2. 👀 Vários cartões. No cartão **REST API** (não "REST API Private") clique em **Build**.
+2. 👀 A tela depende de a conta já ter APIs:
+   - **Nenhuma API ainda:** abre a página inicial "API Gateway — Create and manage APIs at scale". ▶ Desça até **API types** e, no cartão **REST APIs**, clique em **Create REST API**. *(Não use "Create HTTP API" nem "Create WebSocket API"; o botão **Create an API** do quadro "Get started" leva a uma tela com cartões, e nela vale a regra de baixo.)*
+   - **Tela com vários cartões:** no cartão **REST API** (não "REST API Private") clique em **Build**.
 3. ▶ Selecione **New API**. **API name**: `feedback-api`. **API endpoint type**: **Regional**.
 4. ▶ **Create API**.
 
@@ -3079,8 +3209,11 @@ Usamos **REST API** (e não "HTTP API") porque só a REST API tem **chave de API
    - **Throttling** (ligado): **Rate** `10` · **Burst** `20` *(requisições por segundo)*
    - **Quota** (ligado): `1000` requests por **Day**
 3. ▶ **Create usage plan** (ou **Next**, conforme a tela).
-4. ▶ Na página do plano, associe o stage: **Associated stages** → **Add stage** → API `feedback-api` · Stage `prod` → confirme (✔).
-5. ▶ Associe a chave: **Associated API keys** → **Add API key** → **Create and add new key** → **Name**: `feedback-chave-demo` → **API key**: **Auto generate** → **Save**.
+   - Em algumas versões, a própria tela de criação já pede o stage (**Add stage** → API `feedback-api` · Stage `prod`). Se pedir, preencha ali; aí o passo 4 já estará feito.
+   - 👀 Abre a página do plano, com **Usage plan details** (Rate, Burst, Quota) e, embaixo, as **abas** **Associated stages** · **Associated API keys** · **Tags**.
+   - Confira o nome no título: deve ser `feedback-plano-de-uso`. Se saiu duplicado ou errado, corrija em **Actions** ▾ → **Edit usage plan**.
+4. ▶ Aba **Associated stages**: se `feedback-api` · `prod` **já aparece na lista**, pule. Senão: **Add stage** → API `feedback-api` · Stage `prod` → **Add to usage plan** (ou ✔).
+5. ▶ Clique na **aba** **Associated API keys** (ao lado de "Associated stages") → **Add API key** → **Create and add new key** → **Name**: `feedback-chave-demo` → **API key**: **Auto generate** → **Add API key** (ou **Save**).
 6. ▶ Para ver o valor: menu esquerdo **API keys** → clique em `feedback-chave-demo` → no campo **API key** clique em **Show** → **copie**.
 
 > ⚠️ **Nunca mostre o valor da chave no vídeo nem coloque no GitHub.** É uma senha de acesso à API.
@@ -3097,7 +3230,10 @@ Usamos **REST API** (e não "HTTP API") porque só a REST API tem **chave de API
    - **Time zone**: **America/Sao_Paulo** (aparece como `(UTC-03:00) America/Sao_Paulo`)
    - **Schedule type**: **Cron-based schedule**
    - **Cron expression**, campo a campo: **Minutes** `0` · **Hours** `8` · **Day of month** `?` · **Month** `*` · **Day of the week** `MON` · **Year** `*`
+   - 👀 Logo abaixo do cron aparece **Next 10 trigger dates**. Confira: deve começar por segundas às `08:00:00 (UTC-03:00)`, ex.: `Mon, 02 Nov 2026`, `Mon, 09 Nov 2026`, `Mon, 16 Nov 2026`...
    - **Flexible time window**: **Off**
+   - Quadro **Timeframe**: deixe **Start date and time** e **End date and time** **vazios** (a agenda vale a partir de agora, sem data de fim).
+     - O aviso azul **Daylight saving time** fala de horário de verão; o Brasil não adota hoje, então **não afeta** nada.
    - **Next**
 3. **Passo 2 — Select target:**
    - **Templated targets** → **AWS Lambda – Invoke**
@@ -3184,6 +3320,8 @@ No Postman troque o corpo por:
 ▶ DynamoDB → **Tables** → `feedback-avaliacoes` → **Explore table items**. 👀 Lista com `id`, `descricao`, `nota`, `urgencia`, `dataEnvio`, `dia`.
 
 ### 7.5 Carregar dados de exemplo para o relatório
+
+> 💡 **Vai usar dados reais enviados pela API ao longo dos dias?** Siga a **seção 15** (plano de execução em produção) em vez de 7.5 a 7.7.
 
 O relatório precisa de avaliações de dias diferentes. Vamos criar alguns itens **manualmente** (todos MEDIA/BAIXA para **não** disparar e-mails de alerta).
 
@@ -3848,6 +3986,84 @@ git push
 | `Resource not accessible by integration` | Faltam `permissions` no workflow | Confira o bloco `permissions` (`id-token: write`) |
 
 **Se algo der errado: copie a mensagem de erro completa (texto ou print sem chaves) e me envie.** Eu ajudo a corrigir.
+
+---
+
+## 15. Plano de execução em produção (30/10 a 15/11/2026)
+
+Em vez de dados criados à mão (7.5) e disparos de teste (7.6 e 7.7), o sistema roda **como em produção real**. De 30/10 a 15/11, você envia avaliações **pelo endpoint**, uma vez por dia. O **agendamento de verdade** (segunda às 08:00, payload `{}`) gera os relatórios sozinho. Nada passa pela aba **Test** do Lambda.
+
+### 15.1 Os arquivos
+
+Ficam na pasta `postman/` do projeto:
+
+| Arquivo | O que é |
+|---|---|
+| `feedback-platform-plano-execucao.postman_collection.json` | **17 pastas**, uma por dia de 30/10 a 15/11, com **3 avaliações** cada (51 no total, 8 críticas), mais a pasta **Cenários de erro** (9 requisições) |
+| `feedback-platform-prod.postman_environment.json` | Variáveis `baseUrl` e `apiKey`, com a chave **vazia** |
+
+Como a collection cobre os cenários:
+- **Todas as faixas e limites de nota:** 0, 1, 2, 3 (ALTA) · 4, 5, 6 (MEDIA) · 7, 8, 9, 10 (BAIXA).
+- **Casos especiais:** acentos, uma descrição longa (~400 caracteres) e uma com espaços nas pontas (o sistema grava sem eles).
+- **Críticas espalhadas** pelos dias, para gerar e-mails **[URGENTE]** reais ao longo do período.
+- **Testes automáticos** em cada requisição: status **201**, `urgencia` correta para a nota, presença de `id` e `dataEnvio`. Nos erros: **400**, ou **403** sem chave.
+
+### 15.2 Preparar o Postman (uma vez só)
+
+1. ▶ Postman → **Import** → arraste os **dois** arquivos da pasta `postman/` → **Import**.
+2. ▶ Menu esquerdo **Environments** → `Feedback Platform – prod`. Preencha a coluna **Current value** (não a "Initial value"):
+   - `baseUrl`: a URL do stage **sem** `/avaliacao` no fim, ex.: `https://abc123.execute-api.us-east-1.amazonaws.com/prod` (6.7 D)
+   - `apiKey`: o valor da chave `feedback-chave-demo` (6.8, passo 6)
+   - ▶ **Save** (`Ctrl + S`).
+3. ▶ No canto superior direito do Postman, selecione o environment **Feedback Platform – prod**.
+4. ▶ Teste a configuração com uma requisição da pasta **Cenários de erro**, como "Nota 11 → 400". Se voltar **400** com `{"erro": "..."}`, a URL e a chave estão certas e **nada foi gravado**.
+
+> ⚠️ **A chave fica só no seu Postman.** O "Current value" não é exportado nem sincronizado. **Não** preencha a "Initial value" e **não** coloque a chave nos arquivos da pasta `postman/` (eles vão para o GitHub).
+
+### 15.3 Rotina diária (2 minutos)
+
+1. ▶ Abra a pasta **Dia dd/MM** de **hoje** → **Run** (ou clique em cada requisição → **Send**).
+   - Se o plano gratuito do Postman limitar o **Run**, use **Send** nas 3 requisições. O efeito é o mesmo.
+2. 👀 Aba **Test Results**: tudo **verde**.
+3. 👀 Se a pasta tiver uma nota 🚨 (ALTA), o e-mail **[URGENTE]** chega em até ~1 minuto. **Grave** essa chegada em pelo menos um dos dias, para usar no vídeo.
+4. ▶ (Opcional) Anote numa planilha: data, notas enviadas e se o e-mail chegou.
+
+> **A data gravada é a do envio, não o nome da pasta.** Se esquecer um dia, envie a pasta atrasada no dia seguinte: ela conta como o dia seguinte, o que não é problema. Só **não** envie duas pastas de uma vez esperando que caiam em dias diferentes.
+>
+> Testes extras que você fizer pelo endpoint (inclusive no vídeo) também entram no relatório. Os **cenários de erro não gravam nada**.
+
+### 15.4 Calendário dos relatórios automáticos
+
+O relatório de segunda às 08:00 cobre **de segunda a domingo da semana anterior**. Se você enviar **somente** as pastas da collection, uma por dia, os e-mails devem mostrar:
+
+| Relatório (segunda 08:00) | Cobre | Pastas incluídas | Total | Média | ALTA / MEDIA / BAIXA |
+|---|---|---|---|---|---|
+| **02/11** | 26/10 a 01/11 | 30/10, 31/10, 01/11 | 9 | 6,00 | 2 / 3 / 4 |
+| **09/11** | 02/11 a 08/11 | 02/11 a 08/11 | 21 | ≈ 6,57 | 3 / 5 / 13 |
+| **16/11** | 09/11 a 15/11 | 09/11 a 15/11 | 21 | ≈ 6,76 | 3 / 5 / 13 |
+
+- O de **02/11** é o **ensaio**: confira se o e-mail chegou às 08:00 e se os números batem. Se algo falhar, ainda dá tempo de corrigir.
+- O de **16/11**, um dia antes da entrega, é o **principal** para o vídeo. O de **09/11** é a reserva.
+- Se os números vierem diferentes, provavelmente houve envio extra ou dia trocado. O relatório traz a lista das avaliações para conferir.
+
+### 15.5 O que gravar em cada momento
+
+| Quando | O que gravar |
+|---|---|
+| Qualquer dia do plano | Postman enviando a pasta do dia (**201**, testes verdes); o item novo em DynamoDB → **Explore table items**; o log da Função 1 no CloudWatch |
+| Um dia com nota 🚨 | O e-mail **[URGENTE]** chegando; o log da Função 2 |
+| Qualquer dia | Pasta **Cenários de erro**: **403** sem chave e **400** nos dados inválidos (com o header `x-api-key` fora da tela) |
+| **Segunda 16/11** (de preferência antes das 08:00) | O schedule `feedback-relatorio-semanal-agenda` (`0 8 ? * MON *`, America/Sao_Paulo) → o e-mail do relatório chegando às 08:00 → o log da Função 3 com o mesmo horário |
+| Depois | Painel do CloudWatch (8.3) com as execuções do período e o rastro no X-Ray (8.5) |
+
+> **Para a banca:** *"Os dados foram enviados pelo endpoint público entre 30/10 e 15/11, e o relatório foi gerado pelo próprio agendamento na segunda às 08:00, sem disparo manual."*
+
+### 15.6 Custos e segurança no período
+
+- ~51 requisições + 3 relatórios + alguns e-mails ficam **muito** abaixo das cotas gratuitas (Lambda, SNS, DynamoDB, API Gateway). O custo esperado é de centavos, saindo dos créditos.
+- Mantenha o **alerta de orçamento** (3.6) ligado.
+- **Nunca** mostre a chave no vídeo nem a coloque no GitHub. Mesmo vazada, o plano de uso limita a 1.000 requisições/dia.
+- Depois da entrega (17/11), apague tudo seguindo a **seção 13**.
 
 ---
 
