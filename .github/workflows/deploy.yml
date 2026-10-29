@@ -44,7 +44,6 @@ jobs:
 
       - name: Atualizar o codigo das 4 funcoes Lambda
         run: |
-          run: |
           for funcao in feedback-receber-avaliacao feedback-notificar-urgencia feedback-relatorio-semanal feedback-consultar-relatorio; do
             echo "Atualizando $funcao ..."
             aws lambda update-function-code \
