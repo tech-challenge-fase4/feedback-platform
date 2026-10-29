@@ -1,6 +1,7 @@
 package br.com.techchallenge.feedback.domain;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -17,14 +18,24 @@ public record PeriodoRelatorio(LocalDate inicio, LocalDate fim) {
     public static final int DIAS_DA_SEMANA = 7;
 
     /**
+     * Maior período aceito, em dias. Cada dia é uma consulta ao banco,
+     * então o limite também limita o custo de um relatório sob demanda.
+     */
+    public static final int MAX_DIAS = 31;
+
+    /**
      * @throws NullPointerException     se {@code inicio} ou {@code fim} forem nulos
-     * @throws IllegalArgumentException se {@code inicio} for depois de {@code fim}
+     * @throws PeriodoInvalidoException se {@code inicio} for depois de {@code fim}
+     *                                  ou o período passar de {@value #MAX_DIAS} dias
      */
     public PeriodoRelatorio {
         Objects.requireNonNull(inicio, "inicio é obrigatório");
         Objects.requireNonNull(fim, "fim é obrigatório");
         if (inicio.isAfter(fim)) {
-            throw new IllegalArgumentException("inicio não pode ser depois de fim");
+            throw new PeriodoInvalidoException("A data de início não pode ser depois da data de fim");
+        }
+        if (ChronoUnit.DAYS.between(inicio, fim) + 1 > MAX_DIAS) {
+            throw new PeriodoInvalidoException("O período deve ter no máximo " + MAX_DIAS + " dias");
         }
     }
 

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,4 +67,23 @@ public record RelatorioSemanal(PeriodoRelatorio periodo, int total, double media
 
         return new RelatorioSemanal(periodo, doPeriodo.size(), media, porDia, porUrgencia, doPeriodo);
     }
+
+        /**
+     * Média das notas de cada dia do período, na mesma ordem de {@link #porDia()}.
+     * Dias sem avaliação ficam com {@code null}, para não confundir com média 0
+     * (nota 0 é uma nota válida).
+     *
+     * @return média por dia; {@code null} nos dias sem avaliação
+     */
+    public Map<LocalDate, Double> mediaPorDia() {
+        Map<LocalDate, Integer> somaPorDia = new HashMap<>();
+        for (Avaliacao a : avaliacoes) {
+            somaPorDia.merge(a.dia(), a.nota(), Integer::sum);
+        }
+        Map<LocalDate, Double> medias = new LinkedHashMap<>();
+        porDia.forEach((dia, quantidade) ->
+                medias.put(dia, quantidade == 0 ? null : (double) somaPorDia.get(dia) / quantidade));
+        return Collections.unmodifiableMap(medias);
+    }
+
 }

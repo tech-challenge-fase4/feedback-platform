@@ -43,3 +43,6 @@ nb-configuration.xml
 /.quarkus/cli/plugins/
 # TLS Certificates
 .certs/
+
+# Configuração da página web (contém a chave de API do front)
+frontend/config.js

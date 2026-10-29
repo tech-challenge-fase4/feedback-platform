@@ -3,23 +3,22 @@ package br.com.techchallenge.feedback.application.usecase;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 import br.com.techchallenge.feedback.application.formatacao.RelatorioFormatter;
 import br.com.techchallenge.feedback.application.port.AvaliacaoRepository;
 import br.com.techchallenge.feedback.application.port.NotificacaoGateway;
-import br.com.techchallenge.feedback.domain.Avaliacao;
 import br.com.techchallenge.feedback.domain.PeriodoRelatorio;
 import br.com.techchallenge.feedback.domain.RelatorioSemanal;
 
 /**
  * CASO DE USO da Função 3: consolidar a semana e enviar o relatório aos administradores.
+ * A consolidação é a mesma da consulta sob demanda ({@link ConsultarRelatorioUseCase});
+ * este caso de uso só acrescenta o envio do e-mail.
  */
 public class GerarRelatorioSemanalUseCase {
 
-    private final AvaliacaoRepository repositorio;
+    private final ConsultarRelatorioUseCase consulta;
     private final NotificacaoGateway notificacao;
     private final RelatorioFormatter formatador;
     private final Clock relogio;
@@ -34,7 +33,7 @@ public class GerarRelatorioSemanalUseCase {
      */
     public GerarRelatorioSemanalUseCase(AvaliacaoRepository repositorio, NotificacaoGateway notificacao,
                                         RelatorioFormatter formatador, Clock relogio, ZoneId zona) {
-        this.repositorio = Objects.requireNonNull(repositorio);
+        this.consulta = new ConsultarRelatorioUseCase(repositorio, relogio, zona);
         this.notificacao = Objects.requireNonNull(notificacao);
         this.formatador = Objects.requireNonNull(formatador);
         this.relogio = Objects.requireNonNull(relogio);
@@ -52,12 +51,7 @@ public class GerarRelatorioSemanalUseCase {
         LocalDate hoje = LocalDate.ofInstant(relogio.instant(), zona);
         PeriodoRelatorio periodo = PeriodoRelatorio.semana(hoje, incluirHoje);
 
-        List<Avaliacao> avaliacoes = new ArrayList<>();
-        for (LocalDate dia : periodo.dias()) {
-            avaliacoes.addAll(repositorio.buscarPorDia(dia));
-        }
-
-        RelatorioSemanal relatorio = RelatorioSemanal.consolidar(avaliacoes, periodo);
+        RelatorioSemanal relatorio = consulta.executar(periodo);
         notificacao.enviar(formatador.formatar(relatorio));
         return relatorio;
     }
