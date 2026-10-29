@@ -10,6 +10,7 @@ import br.com.techchallenge.feedback.application.formatacao.RelatorioFormatter;
 import br.com.techchallenge.feedback.application.port.AvaliacaoRepository;
 import br.com.techchallenge.feedback.application.port.GeradorDeId;
 import br.com.techchallenge.feedback.application.port.NotificacaoGateway;
+import br.com.techchallenge.feedback.application.usecase.ConsultarRelatorioUseCase;
 import br.com.techchallenge.feedback.application.usecase.GerarRelatorioSemanalUseCase;
 import br.com.techchallenge.feedback.application.usecase.NotificarAvaliacaoCriticaUseCase;
 import br.com.techchallenge.feedback.application.usecase.RegistrarAvaliacaoUseCase;
@@ -67,4 +68,12 @@ public class ConfiguracaoCasosDeUso {
         return new GerarRelatorioSemanalUseCase(repositorio, notificacao,
                 new RelatorioFormatter(zona), relogio, zona);
     }
+
+    /** @return caso de uso da Função 4, ligado ao DynamoDB (só leitura, sem SNS) */
+    @Produces
+    @Singleton
+    ConsultarRelatorioUseCase consultarRelatorio(AvaliacaoRepository repositorio, Clock relogio, ZoneId zona) {
+        return new ConsultarRelatorioUseCase(repositorio, relogio, zona);
+    }
+
 }
