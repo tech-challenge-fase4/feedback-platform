@@ -1,0 +1,56 @@
+name: Build, testes e deploy das funcoes
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # necessário para o login OIDC na AWS
+  contents: read
+
+concurrency:
+  group: deploy-funcoes
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v5
+
+      - name: Instalar Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Permitir executar o Maven Wrapper
+        run: chmod +x mvnw
+
+      - name: Testes e empacotamento (gera target/function.zip)
+        run: ./mvnw -B clean package
+
+      - name: Conferir o pacote
+        run: ls -lh target/function.zip
+
+      - name: Autenticar na AWS (OIDC, sem chaves)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Atualizar o codigo das 4 funcoes Lambda
+        run: |
+          run: |
+          for funcao in feedback-receber-avaliacao feedback-notificar-urgencia feedback-relatorio-semanal feedback-consultar-relatorio; do
+            echo "Atualizando $funcao ..."
+            aws lambda update-function-code \
+              --function-name "$funcao" \
+              --zip-file fileb://target/function.zip \
+              --query 'LastModified' --output text
+            aws lambda wait function-updated --function-name "$funcao"
+            echo "OK: $funcao"
+          done
