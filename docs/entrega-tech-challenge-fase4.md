@@ -6,8 +6,8 @@
 |---|---|
 | **Integrante** | EBER SPULVEDA LASSO - RM: 371982 |
 | **Repositório (público)** | https://github.com/tech-challenge-fase4/feedback-platform |
-| **Página de testes (banca)** | [INSERIR URL DO CLOUDFRONT] (no ar até 15/12/2026) |
-| **Vídeos de demonstração** | ver [seção 12](#12-vídeos-de-demonstração) |
+| **Página de testes - (no ar até 15/12/2026) ** | https://d1ujhkrw2v2i80.cloudfront.net |
+| **Vídeos de demonstração** |  |
 | **Data de entrega** | 17/11/2026 |
 
 > **Para a banca testar agora:** abra a **página de testes** acima. Nela é possível enviar uma avaliação (descrição e nota) e gerar, na hora, o relatório do período escolhido, com a média das notas por dia e o download em PDF. Os e-mails chegam só ao administrador, por isso a página mostra o resultado de cada passo. Detalhes na [seção 5](#5-página-web-de-testes).
@@ -337,7 +337,7 @@ Em `porDia`, `media: null` indica **dia sem avaliações**, que é diferente de 
 
 ## 5. Página web de testes
 
-**Endereço:** [INSERIR URL DO CLOUDFRONT], disponível até **15/12/2026**.
+**Endereço:** https://d1ujhkrw2v2i80.cloudfront.net/ , disponível até **15/12/2026**.
 
 **Navegador recomendado:** **Google Chrome** atualizado, no computador ou no celular. A página usa só recursos padrão da web, então deve funcionar também nas versões atuais do Edge, Firefox e Safari.
 
