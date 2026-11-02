@@ -6,8 +6,7 @@
 |---|---|
 | **Integrante** | EBER SPULVEDA LASSO - RM: 371982 |
 | **Repositório (público)** | https://github.com/tech-challenge-fase4/feedback-platform |
-| **Página de testes - (no ar até 15/12/2026) ** | https://d1ujhkrw2v2i80.cloudfront.net |
-| **Vídeos de demonstração** |  |
+| **Página de testes - (no ar até 15/12/2026)** | https://d1ujhkrw2v2i80.cloudfront.net |
 | **Data de entrega** | 17/11/2026 |
 
 > **Para a banca testar agora:** abra a **página de testes** acima. Nela é possível enviar uma avaliação (descrição e nota) e gerar, na hora, o relatório do período escolhido, com a média das notas por dia e o download em PDF. Os e-mails chegam só ao administrador, por isso a página mostra o resultado de cada passo. Detalhes na [seção 5](#5-página-web-de-testes).
@@ -565,10 +564,7 @@ Depois de 15/12/2026, todos os recursos serão removidos.
 
 | # | Conteúdo | Link |
 |---|---|---|
-| 1 | **Apresentação geral:** modelo de cloud, arquitetura, configurações no console AWS (funções, roles IAM, API Gateway, DynamoDB, SNS, Scheduler, S3 e CloudFront), segurança e monitoramento | [INSERIR LINK DO YOUTUBE] |
-| 2 | **Aplicação em funcionamento:** envio de avaliações pela API, gravação no DynamoDB, e-mail de avaliação crítica, cenários de erro (400/403), logs e X-Ray | [INSERIR LINK DO YOUTUBE] |
-| 3 | **Relatório semanal automático:** execução pelo EventBridge Scheduler na segunda-feira às 08:00 e o e-mail recebido | [INSERIR LINK DO YOUTUBE] |
-| 4 | **Página web e relatório sob demanda:** envio de avaliações pela página, e-mail crítico chegando, relatório por período com média por dia, PDF, bucket privado (AccessDenied direto no S3), plano de uso da chave da página e trace no X-Ray | [INSERIR LINK DO YOUTUBE] |
+| 1 | **Apresentação geral e em funcionamento:** modelo de cloud, arquitetura, configurações no console AWS (funções, roles IAM, API Gateway, DynamoDB, SNS, Scheduler, S3 e CloudFront), segurança e monitoramento. envio de avaliações pela API, gravação no DynamoDB, e-mail de avaliação crítica, cenários de erro (400/403), logs e X-Ray | https://youtu.be/QviVpkKXXnk |
 
 ---
 
